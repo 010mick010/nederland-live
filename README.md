@@ -60,6 +60,8 @@ De online muur gebruikt de `cams.js` op GitHub. Upload het bestand na een verver
 | `cams.js` | De lijst met streams |
 | `ververs-streams.py` | Werkt de lijst bij |
 | `kanalen.txt` | Optioneel: kanalen die je zelf hebt goedgekeurd |
+| `start-webcams.bat` | Start de muur met alle webcams lokaal |
+| `start-natuur.bat` | Start de natuurmuur lokaal |
 
 ## Rechten
 
