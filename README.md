@@ -2,7 +2,9 @@
 
 Een videomuur met livewebcams uit heel Nederland, via YouTube. De schermen wisselen willekeurig en starten standaard in hoge resolutie.
 
-## Starten
+**Bekijk de muur online: https://010mick010.github.io/nederland-live/**
+
+## Lokaal starten
 
 Dubbelklik op `start-webcams.bat` (Windows, Python nodig). De muur opent op http://localhost:8377. Het bestand `index.html` los openen werkt niet, omdat YouTube dan niets afspeelt.
 
@@ -39,6 +41,8 @@ Gebruik `--proef` om niets weg te schrijven. Een run duurt ongeveer een kwartier
 - Nieuwe streams van bekende kanalen komen er automatisch bij. Hun naam en plaats zijn een schatting uit de titel of het kanaal.
 - Een stream verdwijnt pas na twee verversingen op rij zonder live beeld.
 - Onbekende kanalen met een Nederlandse aanwijzing komen in `nieuwe-kanalen.txt`. Kopieer de regel van een kanaal dat echt in Nederland staat naar `kanalen.txt`.
+
+De online muur gebruikt de `cams.js` op GitHub. Upload het bestand na een verversing opnieuw, dan werkt GitHub Pages de site vanzelf bij.
 
 ## Bestanden
 
