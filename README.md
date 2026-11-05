@@ -4,6 +4,14 @@ Een videomuur met livewebcams uit heel Nederland, via YouTube. De schermen wisse
 
 **Bekijk de muur online: https://010mick010.github.io/nederland-live/**
 
+## Natuurmuur
+
+**Bekijk de natuurmuur online: https://010mick010.github.io/nederland-live/?natuur**
+
+Met `?natuur` achter het adres toont de muur alleen Nederlandse natuur: vogels, zeehonden, strand en duinen, land en water. Lokaal start je die met `start-natuur.bat`. Dierentuinen, asieldieren, boulevards en havens vallen erbuiten.
+
+Een stream hoort bij de natuurmuur als hij in `cams.js` het veld `"natuur"` heeft, met de waarde `vogels`, `zeehonden`, `kust` of `land`. Hier staat "Alleen 1080p en hoger" standaard uit, omdat veel nestcamera's lager uitzenden.
+
 ## Lokaal starten
 
 Dubbelklik op `start-webcams.bat` (Windows, Python nodig). De muur opent op http://localhost:8377. Het bestand `index.html` los openen werkt niet, omdat YouTube dan niets afspeelt.

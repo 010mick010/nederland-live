@@ -19,6 +19,13 @@
   --mono: "IBM Plex Mono", Consolas, monospace;
   color-scheme: dark;
 }
+:root.natuur {          /* Natuurstand: veen bij schemer, met het groen van jong riet */
+  --bg: #0c1410;
+  --panel: #141f19;
+  --line: #2c3d32;
+  --muted: #9bae9f;
+  --oranje: #8fc95f;
+}
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { display: flex; flex-direction: column; background: var(--bg); color: var(--fg); font: 13px/1.3 var(--mono); }
@@ -37,6 +44,7 @@ button:hover, select:hover { border-color: var(--muted); }
 .chip small { font-size: 11px; opacity: .75; }
 label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
 #status { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#other { color: var(--fg); }
 
 #wall { flex: 1 1 auto; min-height: 0; display: grid; gap: 2px; background: #000; position: relative; }
 .tile { position: relative; overflow: hidden; background: #05090b; min-width: 0; min-height: 0; cursor: zoom-in; }
@@ -70,10 +78,11 @@ label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted)
 </head>
 <body>
 <header>
-  <h1>Nederland <span>Live</span></h1>
+  <h1><span id="brand">Nederland</span> <span>Live</span></h1>
   <div class="chips" id="chips" role="group" aria-label="Filter op soort webcam"></div>
   <div class="spacer"></div>
   <div class="ctl">
+    <a id="other" href="?natuur">Naar de natuurmuur</a>
     <label>Schermen
       <select id="n"><option>1</option><option>4</option><option>6</option><option>9</option><option>12</option><option>16</option></select>
     </label>
@@ -94,7 +103,22 @@ label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted)
 
 <script src="cams.js"></script>
 <script>
-const CATS = { alles: 'Alles', stad: 'Stad', kust: 'Kust', water: 'Water & haven', spoor: 'Spoor', vliegen: 'Vliegen', natuur: 'Natuur', dieren: 'Dieren' };
+// Met ?natuur in het adres toont de muur alleen de streams met een "natuur"-groep in cams.js.
+const NATUUR = new URLSearchParams(location.search).has('natuur');
+const LIST = NATUUR ? CAMS.filter(c => c.natuur) : CAMS;
+const kind = c => NATUUR ? c.natuur : c.cat;
+const CATS = NATUUR
+  ? { alles: 'Alles', vogels: 'Vogels', zeehonden: 'Zeehonden', kust: 'Strand & duinen', land: 'Land & water' }
+  : { alles: 'Alles', stad: 'Stad', kust: 'Kust', water: 'Water & haven', spoor: 'Spoor', vliegen: 'Vliegen', natuur: 'Natuur', dieren: 'Dieren' };
+if (NATUUR) {
+  document.documentElement.classList.add('natuur');
+  document.title = 'Natuur Live';
+  document.getElementById('brand').textContent = 'Natuur';
+  const other = document.getElementById('other');
+  other.href = location.pathname;
+  other.textContent = 'Naar alle webcams';
+}
+const STORE = NATUUR ? 'nl-natuur' : 'nl-live';
 const SIZES = { 1080: [1920, 1080], 1440: [2560, 1440], 2160: [3840, 2160] };
 const VQ = { 1080: 'hd1080', 1440: 'hd1440', 2160: 'hd2160' };
 const QLABEL = { highres: '8K', hd2160: '4K', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p' };
@@ -102,9 +126,10 @@ const GRID = { 1: [1, 1], 2: [2, 1], 3: [3, 1], 4: [2, 2], 5: [3, 2], 6: [3, 2],
 const LOAD_TIMEOUT = 25000;
 const REVEAL_DELAY = 3000;
 
-const S = { n: 6, every: 30, vq: 1080, cat: 'alles', hd: true, paused: false };
-try { Object.assign(S, JSON.parse(localStorage.getItem('nl-live') || '{}')); } catch (e) {}
-const save = () => { try { localStorage.setItem('nl-live', JSON.stringify(S)); } catch (e) {} };
+// De natuurmuur toont standaard alles: veel nestcamera's zenden onder 1080p uit en zouden anders wegvallen.
+const S = { n: 6, every: 30, vq: 1080, cat: 'alles', hd: !NATUUR, paused: false };
+try { Object.assign(S, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
+const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
 
 const $ = id => document.getElementById(id);
 const wall = $('wall');
@@ -116,8 +141,8 @@ const HD_LEVELS = ['highres', 'hd2160', 'hd1440', 'hd1080'];
 const low = new Set();
 try { JSON.parse(localStorage.getItem('nl-live-low') || '[]').forEach(id => low.add(id)); } catch (e) {}
 const isHd = c => !low.has(c.id);
-const inPool = c => !dead.has(c.id) && (S.cat === 'alles' || c.cat === S.cat) && (!S.hd || isHd(c));
-const pool = () => CAMS.filter(inPool);
+const inPool = c => !dead.has(c.id) && (S.cat === 'alles' || kind(c) === S.cat) && (!S.hd || isHd(c));
+const pool = () => LIST.filter(inPool);
 const onWall = id => tiles.some(t => (t.cam && t.cam.id === id) || (t.pending && t.pending.cam.id === id));
 function shuffled(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
@@ -282,10 +307,10 @@ function layout() {
 }
 
 function refreshCounts() {
-  const list = CAMS.filter(c => !dead.has(c.id) && (!S.hd || isHd(c)));
+  const list = LIST.filter(c => !dead.has(c.id) && (!S.hd || isHd(c)));
   document.querySelectorAll('.chip').forEach(b => {
     const k = b.dataset.cat;
-    b.querySelector('small').textContent = k === 'alles' ? list.length : list.filter(c => c.cat === k).length;
+    b.querySelector('small').textContent = k === 'alles' ? list.length : list.filter(c => kind(c) === k).length;
     b.setAttribute('aria-pressed', S.cat === k);
   });
 }

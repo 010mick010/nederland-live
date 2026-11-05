@@ -47,7 +47,10 @@ GENERIC = ['webcam nederland', 'live webcam netherlands', 'holland live cam', 'l
            'ship spotting netherlands live', 'schepen live webcam', 'nieuwe waterweg live', 'haven webcam live',
            'vogel webcam nederland live', 'ooievaar webcam live', 'wadden webcam live', 'Dutch live webcam 4K',
            'planespotting schiphol live', 'weer webcam live nederland', 'snelweg webcam live nederland',
-           'dierentuin live webcam nederland']
+           'dierentuin live webcam nederland', 'natuur webcam live nederland', 'wildcam nederland live',
+           'nestkast webcam live', 'beleef de lente webcam', 'slechtvalk webcam live', 'uil webcam live nederland',
+           'kerkuil webcam live', 'steenuil webcam live', 'zeehonden webcam live', 'veluwe live webcam',
+           'biesbosch webcam live', 'duinen webcam live']
 NOT_A_WEBCAM = re.compile(r'\b(backup|dashboard|dordrecht nu)\b', re.I)  # zulke titels zijn geen echt webcambeeld
 NL_HINT = re.compile(r'\b(nederland|netherlands|holland|dutch|' + '|'.join(map(re.escape, PLACES)) + r')\b', re.I)
 
@@ -184,6 +187,10 @@ def main():
                 cat = Counter(c['cat'] for c in same).most_common(1)[0][0] if same else 'stad'
                 cam = dict(id=vid, place=guess_place(s['title'], same), name=clean_title(s['title'], s['channel']),
                            cat=cat, channelId=s['channelId'])
+                # Een kanaal met alleen natuurstreams levert nieuwe natuurstreams op; bij een gemengd kanaal blijft dat handwerk.
+                groups = {c.get('natuur') for c in same}
+                if len(groups) == 1 and None not in groups:
+                    cam['natuur'] = groups.pop()
                 cams.append(cam)
                 by_id[vid] = cam
                 added.append(cam)
