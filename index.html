@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nederland Live</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: één dunne bedieningsbalk, daaronder een videomuur die het hele scherm vult zonder scrollen. */
+:root {
+  --bg: #0b1317;        /* Noordzee bij nacht */
+  --panel: #131e24;
+  --line: #2a3a43;
+  --fg: #e8eef0;
+  --muted: #94a7b0;
+  --oranje: #ff7a1a;
+  --live: #ff4b3e;
+  --display: "Saira Condensed", "Arial Narrow", Arial, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; background: var(--bg); color: var(--fg); font: 13px/1.3 var(--mono); }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+h1 { margin: 0; font: 700 22px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; }
+h1 span { color: var(--oranje); }
+.chips, .ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.chips { gap: 4px; }
+.spacer { flex: 1 1 auto; }
+button, select { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 4px 8px; cursor: pointer; }
+select { background: var(--bg); }
+button:hover, select:hover { border-color: var(--muted); }
+:focus-visible { outline: 2px solid var(--oranje); outline-offset: 1px; }
+.chip[aria-pressed="true"] { background: var(--oranje); border-color: var(--oranje); color: #14090a; font-weight: 500; }
+.chip small { font-size: 11px; opacity: .75; }
+label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+#status { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+#wall { flex: 1 1 auto; min-height: 0; display: grid; gap: 2px; background: #000; position: relative; }
+.tile { position: relative; overflow: hidden; background: #05090b; min-width: 0; min-height: 0; cursor: zoom-in; }
+.tile.focus { position: absolute; inset: 0; z-index: 5; cursor: zoom-out; }
+.layer { position: absolute; inset: 0; opacity: 0; transition: opacity .8s ease; pointer-events: none; }
+.layer.on { opacity: 1; }
+/* De speler draait intern op volle resolutie en wordt alleen visueel verkleind:
+   YouTube kiest de kwaliteit op basis van de afmetingen van de speler. */
+.layer iframe { position: absolute; left: 50%; top: 50%; width: var(--w); height: var(--h); border: 0; transform: translate(-50%, -50%) scale(var(--s, 1)); }
+.tile.wait::before { content: "Verbinden…"; position: absolute; left: 10px; top: 10px; color: var(--muted); }
+
+.cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 7px; display: flex; align-items: flex-end; gap: 8px; pointer-events: none; background: linear-gradient(transparent, rgba(0,0,0,.72)); color: #fff; }
+.cap b { font: 700 clamp(15px, 1.5vw, 24px)/1.05 var(--display); text-transform: uppercase; letter-spacing: .02em; }
+.cap i { font: 400 12px/1.2 var(--mono); opacity: .85; display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap > div { min-width: 0; flex: 1; }
+.q { flex: none; font-size: 11px; padding: 1px 5px; border: 1px solid rgba(255,255,255,.45); border-radius: 2px; }
+.q::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--live); }
+.q.low { color: #ffc9a6; border-color: #ffc9a6; }
+
+.btns { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.tile:hover .btns, .tile:focus-within .btns, .tile.pinned .btns, .tile.sound .btns { opacity: 1; }
+@media (hover: none) { .btns { opacity: 1; } }
+.btns button, .btns a { font-size: 12px; color: #fff; background: rgba(5,9,11,.78); border: 1px solid rgba(255,255,255,.3); border-radius: 3px; padding: 3px 7px; text-decoration: none; cursor: pointer; }
+.tile.pinned .pin, .tile.sound .snd { background: var(--oranje); border-color: var(--oranje); color: #14090a; }
+
+#notice { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+#notice code { color: var(--fg); }
+@media (prefers-reduced-motion: reduce) { .layer { transition: none; } }
+@media (max-width: 640px) { h1 { font-size: 18px; } .cap i { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Nederland <span>Live</span></h1>
+  <div class="chips" id="chips" role="group" aria-label="Filter op soort webcam"></div>
+  <div class="spacer"></div>
+  <div class="ctl">
+    <label>Schermen
+      <select id="n"><option>1</option><option>4</option><option>6</option><option>9</option><option>12</option><option>16</option></select>
+    </label>
+    <label>Wisselen
+      <select id="every"><option value="15">15 s</option><option value="30">30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option></select>
+    </label>
+    <label>Kwaliteit
+      <select id="vq"><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select>
+    </label>
+    <label><input type="checkbox" id="hd"> Alleen 1080p en hoger</label>
+    <button id="pause" type="button">Pauzeer wisselen</button>
+    <button id="shuffle" type="button">Alles husselen</button>
+    <button id="full" type="button">Volledig scherm</button>
+    <span id="status" aria-live="off"></span>
+  </div>
+</header>
+<main id="wall"></main>
+
+<script src="cams.js"></script>
+<script>
+const CATS = { alles: 'Alles', stad: 'Stad', kust: 'Kust', water: 'Water & haven', spoor: 'Spoor', vliegen: 'Vliegen', natuur: 'Natuur', dieren: 'Dieren' };
+const SIZES = { 1080: [1920, 1080], 1440: [2560, 1440], 2160: [3840, 2160] };
+const VQ = { 1080: 'hd1080', 1440: 'hd1440', 2160: 'hd2160' };
+const QLABEL = { highres: '8K', hd2160: '4K', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p' };
+const GRID = { 1: [1, 1], 2: [2, 1], 3: [3, 1], 4: [2, 2], 5: [3, 2], 6: [3, 2], 7: [4, 2], 8: [4, 2], 9: [3, 3], 10: [4, 3], 11: [4, 3], 12: [4, 3], 13: [4, 4], 14: [4, 4], 15: [4, 4], 16: [4, 4] };
+const LOAD_TIMEOUT = 25000;
+const REVEAL_DELAY = 3000;
+
+const S = { n: 6, every: 30, vq: 1080, cat: 'alles', hd: true, paused: false };
+try { Object.assign(S, JSON.parse(localStorage.getItem('nl-live') || '{}')); } catch (e) {}
+const save = () => { try { localStorage.setItem('nl-live', JSON.stringify(S)); } catch (e) {} };
+
+const $ = id => document.getElementById(id);
+const wall = $('wall');
+const dead = new Set();          // streams die deze sessie niet wilden afspelen
+let deck = [], tiles = [], lastSwapped = null, countdown = S.every, ytReady = false;
+
+// De speler meldt welke kwaliteiten een stream aanbiedt. Streams onder 1080p worden onthouden en bij "Alleen 1080p en hoger" overgeslagen.
+const HD_LEVELS = ['highres', 'hd2160', 'hd1440', 'hd1080'];
+const low = new Set();
+try { JSON.parse(localStorage.getItem('nl-live-low') || '[]').forEach(id => low.add(id)); } catch (e) {}
+const isHd = c => !low.has(c.id);
+const inPool = c => !dead.has(c.id) && (S.cat === 'alles' || c.cat === S.cat) && (!S.hd || isHd(c));
+const pool = () => CAMS.filter(inPool);
+const onWall = id => tiles.some(t => (t.cam && t.cam.id === id) || (t.pending && t.pending.cam.id === id));
+function shuffled(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// Trek uit een geschud stapeltje, zodat elke stream aan de beurt komt voordat er een terugkeert.
+function nextCam() {
+  for (let round = 0; round < 2; round++) {
+    while (deck.length) { const c = deck.pop(); if (inPool(c) && !onWall(c.id)) return c; }
+    deck = shuffled(pool());
+  }
+  return null;
+}
+
+function makeTile() {
+  const el = document.createElement('div');
+  el.className = 'tile wait';
+  el.innerHTML = `<div class="cap"><div><b></b><i></i></div><span class="q" hidden></span></div>
+    <div class="btns"><button type="button" class="snd">Geluid</button><button type="button" class="pin">Vastzetten</button><button type="button" class="nxt">Volgende</button><a class="yt" target="_blank" rel="noopener">YouTube</a></div>`;
+  const t = { el, cam: null, player: null, layer: null, pending: null, pinned: false, sound: false };
+  el.addEventListener('click', e => {
+    if (e.target.closest('.btns')) return;
+    const was = el.classList.contains('focus');
+    tiles.forEach(x => x.el.classList.remove('focus'));
+    if (!was) el.classList.add('focus');
+    fit(t);
+  });
+  el.querySelector('.snd').onclick = () => setSound(t, !t.sound);
+  el.querySelector('.pin').onclick = () => { t.pinned = !t.pinned; el.classList.toggle('pinned', t.pinned); el.querySelector('.pin').textContent = t.pinned ? 'Vast' : 'Vastzetten'; };
+  el.querySelector('.nxt').onclick = () => swap(t);
+  new ResizeObserver(() => fit(t)).observe(el);
+  applySize(t);
+  return t;
+}
+
+function applySize(t) {
+  const [w, h] = SIZES[S.vq];
+  t.el.style.setProperty('--w', w + 'px');
+  t.el.style.setProperty('--h', h + 'px');
+  fit(t);
+}
+function fit(t) {
+  const [w, h] = SIZES[S.vq];
+  const r = t.el.getBoundingClientRect();
+  if (r.width) t.el.style.setProperty('--s', Math.max(r.width / w, r.height / h));
+}
+
+function load(t, cam) {
+  if (!ytReady || !cam || t.pending) return;
+  const layer = document.createElement('div');
+  layer.className = 'layer';
+  const host = document.createElement('div');
+  layer.append(host);
+  t.el.prepend(layer);
+  const p = { cam, layer, player: null, playing: false };
+  t.pending = p;
+  p.timer = setTimeout(() => fail(t, p), LOAD_TIMEOUT);
+  p.player = new YT.Player(host, {
+    videoId: cam.id,
+    width: SIZES[S.vq][0], height: SIZES[S.vq][1],
+    playerVars: { autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, iv_load_policy: 3, playsinline: 1, vq: VQ[S.vq], origin: location.origin },
+    events: {
+      onReady: e => { e.target.mute(); e.target.playVideo(); },
+      onStateChange: e => {
+        // De speler meldt "afspelen" vóór het eerste zichtbare beeld; laat het oude beeld daarom nog even staan.
+        if (e.data === YT.PlayerState.PLAYING && !p.playing) { p.playing = true; setTimeout(() => commit(t, p), REVEAL_DELAY); }
+        else if (e.data === YT.PlayerState.ENDED && t.cam === cam) { dead.add(cam.id); swap(t); }
+      },
+      onError: () => { if (t.pending === p) fail(t, p); else if (t.cam === cam) { dead.add(cam.id); swap(t); } },
+    },
+  });
+}
+
+function commit(t, p) {
+  if (t.pending !== p) return;
+  clearTimeout(p.timer);
+  const oldLayer = t.layer, oldPlayer = t.player;
+  t.pending = null; t.cam = p.cam; t.layer = p.layer; t.player = p.player; t.since = Date.now();
+  p.layer.classList.add('on');
+  t.el.classList.remove('wait');
+  t.el.querySelector('.cap b').textContent = p.cam.place;
+  t.el.querySelector('.cap i').textContent = p.cam.name;
+  t.el.querySelector('.yt').href = 'https://www.youtube.com/watch?v=' + p.cam.id;
+  if (t.sound) p.player.unMute();
+  updateQuality(t);
+  if (oldPlayer) setTimeout(() => { try { oldPlayer.destroy(); } catch (e) {} oldLayer.remove(); }, 900);
+}
+
+function fail(t, p) {
+  if (t.pending !== p) return;
+  clearTimeout(p.timer);
+  dead.add(p.cam.id);
+  t.pending = null;
+  try { p.player && p.player.destroy(); } catch (e) {}
+  p.layer.remove();
+  refreshCounts();
+  load(t, nextCam());
+}
+
+function swap(t) {
+  if (t.pending) return;
+  const cam = nextCam();
+  if (cam) { lastSwapped = t; load(t, cam); }
+}
+
+function setSound(t, on) {
+  tiles.forEach(x => {
+    const want = x === t && on;
+    x.sound = want;
+    x.el.classList.toggle('sound', want);
+    if (x.player && x.player.mute) { want ? x.player.unMute() : x.player.mute(); }
+  });
+}
+
+function checkOffer(t) {
+  if (!t.cam || !t.player || t.offerChecked === t.cam.id || Date.now() - t.since < 6000) return;
+  let levels = [];
+  try { levels = (t.player.getAvailableQualityLevels() || []).filter(l => l !== 'auto'); } catch (e) {}
+  if (!levels.length) return;
+  t.offerChecked = t.cam.id;
+  if (levels.some(l => HD_LEVELS.includes(l))) {
+    if (!low.delete(t.cam.id)) return;
+  } else {
+    low.add(t.cam.id);
+  }
+  try { localStorage.setItem('nl-live-low', JSON.stringify([...low])); } catch (e) {}
+  refreshCounts();
+  layout();
+}
+
+function updateQuality(t) {
+  const el = t.el.querySelector('.q');
+  let q = '';
+  try { q = t.player && t.player.getPlaybackQuality ? t.player.getPlaybackQuality() : ''; } catch (e) {}
+  const label = QLABEL[q];
+  el.hidden = !label;
+  if (label) { el.textContent = label; el.classList.toggle('low', !['highres', 'hd2160', 'hd1440', 'hd1080'].includes(q)); }
+}
+
+// Past het aantal tegels aan op de instelling en het aantal beschikbare streams.
+function layout() {
+  const want = Math.min(S.n, pool().length);
+  while (tiles.length > want) {
+    const i = tiles.reduce((best, t, idx) => (!t.pinned ? idx : best), tiles.length - 1);
+    const [t] = tiles.splice(i, 1);
+    if (t.pending) { clearTimeout(t.pending.timer); try { t.pending.player.destroy(); } catch (e) {} }
+    try { t.player && t.player.destroy(); } catch (e) {}
+    t.el.remove();
+  }
+  while (tiles.length < want) { const t = makeTile(); tiles.push(t); wall.append(t.el); }
+  const [c, r] = GRID[Math.max(1, want)] || [4, 4];
+  const portrait = wall.clientHeight > wall.clientWidth;
+  wall.style.gridTemplateColumns = `repeat(${portrait ? r : c}, minmax(0, 1fr))`;
+  wall.style.gridTemplateRows = `repeat(${portrait ? c : r}, minmax(0, 1fr))`;
+  let notice = $('notice');
+  if (!want) {
+    if (!notice) { notice = document.createElement('div'); notice.id = 'notice'; wall.append(notice); }
+    notice.textContent = 'Geen streams in deze selectie. Zet "Alleen 1080p en hoger" uit of kies een andere soort.';
+  } else if (notice) notice.remove();
+  tiles.forEach((t, i) => {
+    if (t.pending) return;
+    if (!t.cam || (!t.pinned && !inPool(t.cam))) { const cam = nextCam(); if (cam) setTimeout(() => load(t, cam), i * 350); }
+  });
+}
+
+function refreshCounts() {
+  const list = CAMS.filter(c => !dead.has(c.id) && (!S.hd || isHd(c)));
+  document.querySelectorAll('.chip').forEach(b => {
+    const k = b.dataset.cat;
+    b.querySelector('small').textContent = k === 'alles' ? list.length : list.filter(c => c.cat === k).length;
+    b.setAttribute('aria-pressed', S.cat === k);
+  });
+}
+
+function tick() {
+  if (!S.paused && !document.hidden) {
+    countdown--;
+    if (countdown <= 0) {
+      countdown = S.every;
+      const free = tiles.filter(t => !t.pinned && !t.pending && !t.el.classList.contains('focus'));
+      const options = free.length > 1 ? free.filter(t => t !== lastSwapped) : free;
+      if (options.length) swap(options[Math.floor(Math.random() * options.length)]);
+    }
+  }
+  tiles.forEach(t => { updateQuality(t); checkOffer(t); });
+  $('status').textContent = `${pool().length} streams · ` + (S.paused ? 'gepauzeerd' : `wissel over ${Math.max(countdown, 0)} s`);
+}
+
+function init() {
+  $('chips').innerHTML = Object.entries(CATS).map(([k, v]) => `<button type="button" class="chip" data-cat="${k}">${v} <small></small></button>`).join('');
+  $('chips').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    S.cat = b.dataset.cat; save(); deck = []; refreshCounts(); layout();
+  };
+  $('n').value = S.n; $('every').value = S.every; $('vq').value = S.vq; $('hd').checked = S.hd;
+  $('pause').textContent = S.paused ? 'Hervat wisselen' : 'Pauzeer wisselen';
+  $('n').onchange = e => { S.n = +e.target.value; save(); layout(); };
+  $('every').onchange = e => { S.every = +e.target.value; countdown = S.every; save(); };
+  $('vq').onchange = e => { S.vq = +e.target.value; save(); tiles.forEach(applySize); };
+  $('hd').onchange = e => { S.hd = e.target.checked; save(); deck = []; refreshCounts(); layout(); };
+  $('pause').onclick = () => { S.paused = !S.paused; save(); $('pause').textContent = S.paused ? 'Hervat wisselen' : 'Pauzeer wisselen'; };
+  $('shuffle').onclick = () => { deck = shuffled(pool()); tiles.forEach((t, i) => { if (!t.pinned) setTimeout(() => swap(t), i * 350); }); countdown = S.every; };
+  $('full').onclick = () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {}); };
+  addEventListener('keydown', e => { if (e.key === 'Escape') tiles.forEach(t => t.el.classList.remove('focus')); });
+  addEventListener('resize', layout);
+  refreshCounts();
+  if (location.protocol === 'file:') {
+    wall.innerHTML = '<div id="notice"><p>YouTube speelt streams niet af vanuit een los bestand.<br>Start de muur met <code>start-webcams.bat</code> in deze map.</p></div>';
+    return;
+  }
+  layout();
+  setInterval(tick, 1000);
+  tick();
+}
+
+window.onYouTubeIframeAPIReady = () => { ytReady = true; layout(); };
+init();
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
